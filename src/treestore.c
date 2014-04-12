@@ -240,6 +240,122 @@ int ts_set_valuev(struct ts_value *tsv, int count, ...)
 
 int ts_set_valuev_va(struct ts_value *tsv, int count, va_list ap)
 {
+	int i;
+
 	if(count <= 1) return -1;
-	return -1;	/* TODO */
+
+	if((tsv->array = malloc(count * sizeof *tsv->array))) {
+		return -1;
+	}
+	tsv->array_size = count;
+
+	for(i=0; i<count; i++) {
+		struct ts_value *src = va_arg(ap, struct ts_value*);
+		ts_copy_value(tsv->array + i, src);
+	}
+	return 0;
+}
+
+
+/* ---- ts_attr implementation ---- */
+
+int ts_init_attr(struct ts_attr *attr)
+{
+	memset(attr, 0, sizeof *attr);
+	return ts_init_value(&attr->val);
+}
+
+void ts_destroy_attr(struct ts_attr *attr)
+{
+	free(attr->name);
+	ts_destroy_value(&attr->val);
+}
+
+struct ts_attr *ts_alloc_attr(void)
+{
+	struct ts_attr *attr = malloc(sizeof *attr);
+	if(!attr || ts_init_attr(attr) == -1) {
+		free(attr);
+		return 0;
+	}
+	return attr;
+}
+
+void ts_free_attr(struct ts_attr *attr)
+{
+	ts_destroy_attr(attr);
+	free(attr);
+}
+
+int ts_copy_attr(struct ts_attr *dest, struct ts_attr *src)
+{
+	if(dest == src) return 0;
+
+	if(ts_set_attr_name(dest, src->name) == -1) {
+		return -1;
+	}
+
+	if(ts_copy_value(&dest->val, &src->val) == -1) {
+		ts_destroy_attr(dest);
+		return -1;
+	}
+	return 0;
+}
+
+int ts_set_attr_name(struct ts_attr *attr, const char *name)
+{
+	char *n = malloc(strlen(name) + 1);
+	if(!n) return -1;
+	strcpy(n, name);
+
+	free(attr->name);
+	attr->name = n;
+	return 0;
+}
+
+
+/* ---- ts_node implementation ---- */
+
+int ts_init_node(struct ts_node *node)
+{
+	memset(node, 0, sizeof *node);
+	return 0;
+}
+
+void ts_destroy_node(struct ts_node *node)
+{
+	free(node->name);
+
+	while(node->attr_list) {
+		struct ts_attr *attr = node->attr_list;
+		node->attr_list = node->attr_list->next;
+		ts_free_attr(attr);
+	}
+}
+
+struct ts_node *ts_alloc_node(void)
+{
+	struct ts_node *node = malloc(sizeof *node);
+	if(!node || ts_init_node(node) == -1) {
+		free(node);
+		return 0;
+	}
+	return node;
+}
+
+void ts_free_node(struct ts_node *node)
+{
+	ts_destroy_node(node);
+	free(node);
+}
+
+void ts_free_tree(struct ts_node *tree)
+{
+	while(tree->child_list) {
+		struct ts_tree *child = tree->child_list;
+		tree->child_list = tree->child_list->next;
+		ts_free_tree(child);
+	}
+
+	ts_free_node(tree);
 }

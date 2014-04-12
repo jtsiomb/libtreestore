@@ -56,11 +56,22 @@ int ts_set_valuev_va(struct ts_value *tsv, int count, va_list ap);
 /** treestore node attribute */
 struct ts_attr {
 	char *name;
-
 	struct ts_value val;
 
 	struct ts_attr *next;
 };
+
+int ts_init_attr(struct ts_attr *attr);
+void ts_destroy_attr(struct ts_attr *attr);
+
+struct ts_attr *ts_alloc_attr(void);		/**< also calls ts_init_attr */
+void ts_free_attr(struct ts_attr *attr);	/**< also calls ts_destroy_attr */
+
+/** perform a deep-copy of a ts_attr */
+int ts_copy_attr(struct ts_attr *dest, struct ts_attr *src);
+
+int ts_set_attr_name(struct ts_attr *attr, const char *name);
+
 
 
 /** treestore node */
@@ -77,8 +88,12 @@ struct ts_node {
 	struct ts_node *next;	/* next sibling */
 };
 
-struct ts_node *ts_create_node(void);
-void ts_free_node(struct ts_node *n);
+int ts_init_node(struct ts_node *node);
+void ts_destroy_node(struct ts_node *node);
+
+struct ts_node *ts_alloc_node(void);	/**< also calls ts_init_node */
+void ts_free_node(struct ts_node *n);	/**< also calls ts_destroy_node */
+
 void ts_free_tree(struct ts_node *tree);
 
 #ifdef __cplusplus
