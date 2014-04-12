@@ -352,7 +352,7 @@ void ts_free_node(struct ts_node *node)
 void ts_free_tree(struct ts_node *tree)
 {
 	while(tree->child_list) {
-		struct ts_tree *child = tree->child_list;
+		struct ts_node *child = tree->child_list;
 		tree->child_list = tree->child_list->next;
 		ts_free_tree(child);
 	}
