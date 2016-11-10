@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "treestore.h"
+
+struct ts_node *ts_text_load(FILE *fp);
+int ts_text_save(struct ts_node *tree, FILE *fp);
 
 /* ---- ts_value implementation ---- */
 
@@ -358,4 +362,107 @@ void ts_free_tree(struct ts_node *tree)
 	}
 
 	ts_free_node(tree);
+}
+
+void ts_add_attr(struct ts_node *node, struct ts_attr *attr)
+{
+	attr->next = 0;
+	if(node->attr_list) {
+		node->attr_tail->next = attr;
+		node->attr_tail = attr;
+	} else {
+		node->attr_list = node->attr_tail = attr;
+	}
+}
+
+struct ts_attr *ts_get_attr(struct ts_node *node, const char *name)
+{
+	struct ts_attr *attr = node->attr_list;
+	while(attr) {
+		if(strcmp(attr->name, name) == 0) {
+			return attr;
+		}
+		attr = attr->next;
+	}
+	return 0;
+}
+
+void ts_add_child(struct ts_node *node, struct ts_node *child)
+{
+	if(child->parent) {
+		if(child->parent == node) return;
+		ts_remove_child(child->parent, child);
+	}
+	child->parent = node;
+	child->next = 0;
+
+	if(node->child_list) {
+		node->child_tail->next = child;
+		node->child_tail = child;
+	} else {
+		node->child_list = node->child_tail = child;
+	}
+}
+
+int ts_remove_child(struct ts_node *node, struct ts_node *child)
+{
+	struct ts_node dummy, *iter = &dummy;
+	dummy.next = node->child_list;
+
+	while(iter->next && iter->next != child) {
+		iter = iter->next;
+	}
+	if(!iter->next) {
+		return -1;
+	}
+
+	child->parent = 0;
+
+	iter->next = child->next;
+	if(!iter->next) {
+		node->child_tail = iter;
+	}
+	node->child_list = dummy.next;
+	return 0;
+}
+
+struct ts_node *ts_get_child(struct ts_node *node, const char *name)
+{
+	struct ts_node *res = node->child_list;
+	while(res) {
+		if(strcmp(res->name, name) == 0) {
+			return res;
+		}
+		res = res->next;
+	}
+	return 0;
+}
+
+struct ts_node *ts_load(const char *fname)
+{
+	FILE *fp;
+	struct ts_node *root;
+
+	if(!(fp = fopen(fname, "rb"))) {
+		fprintf(stderr, "ts_load: failed to open file: %s: %s\n", fname, strerror(errno));
+		return 0;
+	}
+
+	root = ts_text_load(fp);
+	fclose(fp);
+	return root;
+}
+
+int ts_save(struct ts_node *tree, const char *fname)
+{
+	FILE *fp;
+	int res;
+
+	if(!(fp = fopen(fname, "wb"))) {
+		fprintf(stderr, "ts_save: failed to open file: %s: %s\n", fname, strerror(errno));
+		return 0;
+	}
+	res = ts_text_save(tree, fp);
+	fclose(fp);
+	return res;
 }

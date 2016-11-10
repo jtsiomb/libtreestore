@@ -14,8 +14,8 @@ struct ts_value {
 	enum ts_value_type type;
 
 	char *str;		/**< all values have a string representation */
-	int inum;		/**< numeric values (TS_INT/TS_FLOAT) will have this set */
-	float fnum;		/**< numeric values (TS_INT/TS_FLOAT) will have this set */
+	int inum;		/**< numeric values TS_NUMBER will have this set */
+	float fnum;		/**< numeric values TS_NUMBER will have this set */
 
 	/** vector values (arrays containing ONLY numbers) will have this set */
 	float *vec;		/**< elements of the vector */
@@ -94,7 +94,18 @@ void ts_destroy_node(struct ts_node *node);
 struct ts_node *ts_alloc_node(void);	/**< also calls ts_init_node */
 void ts_free_node(struct ts_node *n);	/**< also calls ts_destroy_node */
 
+/** recursively destroy all the nodes of the tree */
 void ts_free_tree(struct ts_node *tree);
+
+void ts_add_attr(struct ts_node *node, struct ts_attr *attr);
+struct ts_attr *ts_get_attr(struct ts_node *node, const char *name);
+
+void ts_add_child(struct ts_node *node, struct ts_node *child);
+int ts_remove_child(struct ts_node *node, struct ts_node *child);
+struct ts_node *ts_get_child(struct ts_node *node, const char *name);
+
+struct ts_node *ts_load(const char *fname);
+int ts_save(struct ts_node *tree, const char *fname);
 
 #ifdef __cplusplus
 }
