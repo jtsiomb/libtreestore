@@ -4,46 +4,69 @@
 #include <ctype.h>
 #include "treestore.h"
 
+#define MAX_TOKEN_SIZE	512
+struct parser {
+	FILE *fp;
+	int nline;
+	char token[MAX_TOKEN_SIZE];
+};
+
 enum { TOK_SYM, TOK_ID, TOK_NUM, TOK_STR };
 
-static struct ts_node *read_node(FILE *fp);
-static int next_token(FILE *fp, char *buf, int bsz);
+static struct ts_node *read_node(struct parser *pstate);
+static int read_array(struct parser *pstate, struct ts_value *tsv, char endsym);
+static int next_token(struct parser *pstate);
 
 static void print_attr(struct ts_attr *attr, FILE *fp, int level);
 static void print_value(struct ts_value *value, FILE *fp);
 static int tree_level(struct ts_node *n);
 static const char *indent(int x);
+static const char *toktypestr(int type);
+
+#define EXPECT(type) \
+	do { \
+		if(next_token(pst) != (type)) { \
+			fprintf(stderr, "expected %s token\n", toktypestr(type)); \
+			goto err; \
+		} \
+	} while(0)
+
+#define EXPECT_SYM(c) \
+	do { \
+		if(next_token(pst) != TOK_SYM || pst->token[0] != (c)) { \
+			fprintf(stderr, "expected symbol: %c\n", c); \
+			goto err; \
+		} \
+	} while(0)
+
 
 struct ts_node *ts_text_load(FILE *fp)
 {
-	char token[256];
-	struct ts_node *node;
+	char *root_name;
+	struct parser pstate, *pst = &pstate;
+	struct ts_node *node = 0;
 
-	if(next_token(fp, token, sizeof token) != TOK_ID ||
-			!(next_token(fp, token, sizeof token) == TOK_SYM && token[0] == '{')) {
-		fprintf(stderr, "ts_text_load: invalid file format\n");
+	pstate.fp = fp;
+	pstate.nline = 0;
+
+	EXPECT(TOK_ID);
+	if(!(root_name = strdup(pst->token))) {
+		perror("failed to allocate root node name");
 		return 0;
 	}
-	if(!(node = read_node(fp))) {
+	EXPECT_SYM('{');
+	if(!(node = read_node(pst))) {
 		return 0;
 	}
-	if(!(node->name = strdup(token))) {
-		perror("failed to allocate node name");
-		free(node);
-		return 0;
-	}
+	node->name = root_name;
+
+err:
 	return node;
 }
 
-
-#define EXPECT(type) \
-	if(next_token(fp, token, sizeof token) != (type)) goto err
-#define EXPECT_SYM(c) \
-	if(next_token(fp, token, sizeof token) != TOK_SYM || token[0] != (c)) goto err
-
-static struct ts_node *read_node(FILE *fp)
+static struct ts_node *read_node(struct parser *pst)
 {
-	char token[256];
+	int type;
 	struct ts_node *node;
 
 	if(!(node = ts_alloc_node())) {
@@ -51,50 +74,78 @@ static struct ts_node *read_node(FILE *fp)
 		return 0;
 	}
 
-	while(next_token(fp, token, sizeof token) == TOK_ID) {
+	while((type = next_token(pst)) == TOK_ID) {
 		char *id;
 
-		if(!(id = strdup(token))) {
+		if(!(id = strdup(pst->token))) {
 			goto err;
 		}
 
 		EXPECT(TOK_SYM);
 
-		if(token[0] == '=') {
+		if(pst->token[0] == '=') {
 			/* attribute */
 			struct ts_attr *attr;
-			int toktype;
+			int type;
 
 			if(!(attr = ts_alloc_attr())) {
 				goto err;
 			}
 
-			if((toktype = next_token(fp, token, sizeof token)) == -1) {
+			if((type = next_token(pst)) == -1) {
 				ts_free_attr(attr);
+				fprintf(stderr, "read_node: unexpected EOF\n");
 				goto err;
 			}
-			attr->name = id;
-			ts_set_value(&attr->val, token);
 
+			switch(type) {
+			case TOK_NUM:
+				ts_set_valuef(&attr->val, atof(pst->token));
+				break;
+
+			case TOK_SYM:
+				if(pst->token[0] == '[' || pst->token[0] == '{') {
+					char endsym = pst->token[0] + 2; /* end symbol is dist 2 from either '[' or '{' */
+					if(read_array(pst, &attr->val, endsym) == -1) {
+						goto err;
+					}
+				} else {
+					fprintf(stderr, "read_node: unexpected rhs symbol: %c\n", pst->token[0]);
+				}
+				break;
+
+			case TOK_ID:
+			case TOK_STR:
+			default:
+				ts_set_value(&attr->val, pst->token);
+			}
+
+			attr->name = id;
 			ts_add_attr(node, attr);
 
-		} else if(token[0] == '{') {
+		} else if(pst->token[0] == '{') {
 			/* child */
 			struct ts_node *child;
 
-			if(!(child = read_node(fp))) {
+			if(!(child = read_node(pst))) {
 				ts_free_node(node);
 				return 0;
 			}
-			child->name = id;
 
+			child->name = id;
 			ts_add_child(node, child);
 
 		} else {
-			fprintf(stderr, "unexpected token: %s\n", token);
+			fprintf(stderr, "unexpected token: %s\n", pst->token);
 			goto err;
 		}
 	}
+
+	if(type != TOK_SYM || pst->token[0] != '}') {
+		fprintf(stderr, "expected closing brace\n");
+		goto err;
+	}
+	return node;
 
 err:
 	fprintf(stderr, "treestore read_node failed\n");
@@ -102,56 +153,64 @@ err:
 	return 0;
 }
 
-static int next_token(FILE *fp, char *buf, int bsz)
+static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
+{
+	// TODO implement
+	return -1;
+}
+
+static int next_token(struct parser *pst)
 {
 	int c;
-	char *ptr;
+	char *ptr, *bend = pst->token + MAX_TOKEN_SIZE - 1;	/* leave space for the terminator */
 
 	// skip whitespace
-	while((c = fgetc(fp)) != -1 && isspace(c)) {
+	while((c = fgetc(pst->fp)) != -1) {
 		if(c == '#') { // skip to end of line
-			while((c = fgetc(fp)) != -1 && c != '\n');
+			while((c = fgetc(pst->fp)) != -1 && c != '\n');
 			if(c == -1) return -1;
 		}
+		if(!isspace(c)) break;
+		if(c == '\n') ++pst->nline;
 	}
 	if(c == -1) return -1;
 
-	buf[0] = c;
-	buf[1] = 0;
+	pst->token[0] = c;
+	pst->token[1] = 0;
 
 	if(isdigit(c)) {
 		// token is a number
-		ptr = buf + 1;
-		while((c = fgetc(fp)) != -1 && isdigit(c)) {
-			*ptr++ = c;
+		ptr = pst->token + 1;
+		while((c = fgetc(pst->fp)) != -1 && isdigit(c)) {
+			if(ptr < bend) *ptr++ = c;
 		}
-		if(c != -1) ungetc(c, fp);
+		if(c != -1) ungetc(c, pst->fp);
 		*ptr = 0;
 		return TOK_NUM;
 	}
 	if(isalpha(c)) {
 		// token is an identifier
-		ptr = buf + 1;
-		while((c = fgetc(fp)) != -1 && isalnum(c)) {
-			*ptr++ = c;
+		ptr = pst->token + 1;
+		while((c = fgetc(pst->fp)) != -1 && isalnum(c)) {
+			if(ptr < bend) *ptr++ = c;
 		}
-		if(c != -1) ungetc(c, fp);
+		if(c != -1) ungetc(c, pst->fp);
 		*ptr = 0;
 		return TOK_ID;
 	}
 	if(c == '"') {
 		// token is a string constant
-		ptr = buf;
-		while((c = fgetc(fp)) != -1 && c != '"' && c != '\r' && c != '\n') {
-			*ptr++ = c;
+		ptr = pst->token;
+		while((c = fgetc(pst->fp)) != -1 && c != '"' && c != '\r' && c != '\n') {
+			if(ptr < bend) *ptr++ = c;
 		}
+		if(c == '\n') ++pst->nline;
 		if(c != '"') {
 			return -1;
 		}
 		*ptr = 0;
 		return TOK_STR;
 	}
-
 	return TOK_SYM;
 }
 
@@ -172,6 +231,7 @@ int ts_text_save(struct ts_node *tree, FILE *fp)
 	c = tree->child_list;
 	while(c) {
 		ts_text_save(c, fp);
+		c = c->next;
 	}
 
 	fprintf(fp, "%s}\n", indent(lvl));
@@ -217,7 +277,7 @@ static void print_value(struct ts_value *value, FILE *fp)
 		break;
 
 	default:
-		fputs(value->str, fp);
+		fprintf(fp, "\"%s\"", value->str);
 	}
 }
 
@@ -229,7 +289,22 @@ static int tree_level(struct ts_node *n)
 
 static const char *indent(int x)
 {
-	static const char *buf = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
+	static const char buf[] = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
 	const char *end = buf + sizeof buf - 1;
 	return x > sizeof buf - 1 ? buf : end - x;
+}
+
+static const char *toktypestr(int type)
+{
+	switch(type) {
+	case TOK_ID:
+		return "identifier";
+	case TOK_NUM:
+		return "number";
+	case TOK_STR:
+		return "string";
+	case TOK_SYM:
+		return "symbol";
+	}
+	return "unknown";
 }

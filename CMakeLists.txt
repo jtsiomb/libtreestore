@@ -23,6 +23,9 @@ endif()
 target_include_directories(treestore PUBLIC include)
 target_include_directories(treestore-static PUBLIC include)
 
+target_link_libraries(treestore -lexpat)
+target_link_libraries(treestore-static -lexpat)
+
 install(TARGETS treestore
 	RUNTIME DESTINATION bin
 	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

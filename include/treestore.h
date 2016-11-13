@@ -4,18 +4,21 @@
 #include <stdarg.h>
 
 #ifdef __cplusplus
+#define TS_DEFVAL(x) =(x)
 extern "C" {
+#else
+#define TS_DEFVAL(x)
 #endif
 
-enum ts_value_type { TS_UNKNOWN, TS_NUMBER, TS_VECTOR, TS_ARRAY };
+enum ts_value_type { TS_STRING, TS_NUMBER, TS_VECTOR, TS_ARRAY };
 
 /** treestore node attribute value */
 struct ts_value {
 	enum ts_value_type type;
 
-	char *str;		/**< all values have a string representation */
-	int inum;		/**< numeric values TS_NUMBER will have this set */
-	float fnum;		/**< numeric values TS_NUMBER will have this set */
+	char *str;		/**< string values will have this set */
+	int inum;		/**< numeric values will have this set */
+	float fnum;		/**< numeric values will have this set */
 
 	/** vector values (arrays containing ONLY numbers) will have this set */
 	float *vec;		/**< elements of the vector */
@@ -46,7 +49,7 @@ int ts_set_valuei(struct ts_value *tsv, int inum);	/**< equiv: ts_set_valueiv(va
 /** set a ts_value from a list of floats */
 int ts_set_valuefv(struct ts_value *tsv, int count, ...);
 int ts_set_valuefv_va(struct ts_value *tsv, int count, va_list ap);
-int ts_set_valuef(struct ts_value *tsv, int fnum);	/**< equiv: ts_set_valuefv(val, 1, fnum) */
+int ts_set_valuef(struct ts_value *tsv, float fnum);	/**< equiv: ts_set_valuefv(val, 1, fnum) */
 
 /** set a ts_value from a list of ts_value pointers. they are deep-copied as per ts_copy_value */
 int ts_set_valuev(struct ts_value *tsv, int count, ...);
@@ -100,12 +103,25 @@ void ts_free_tree(struct ts_node *tree);
 void ts_add_attr(struct ts_node *node, struct ts_attr *attr);
 struct ts_attr *ts_get_attr(struct ts_node *node, const char *name);
 
+const char *ts_get_attr_str(struct ts_node *node, const char *aname,
+		const char *def_val TS_DEFVAL(0));
+float ts_get_attr_num(struct ts_node *node, const char *aname,
+		float def_val TS_DEFVAL(0.0f));
+int ts_get_attr_int(struct ts_node *node, const char *aname,
+		int def_val TS_DEFVAL(0.0f));
+float *ts_get_attr_vec(struct ts_node *node, const char *aname,
+		float *def_val TS_DEFVAL(0));
+struct ts_value *ts_get_attr_array(struct ts_node *node, const char *aname,
+		struct ts_value *def_val TS_DEFVAL(0));
+
+
 void ts_add_child(struct ts_node *node, struct ts_node *child);
 int ts_remove_child(struct ts_node *node, struct ts_node *child);
 struct ts_node *ts_get_child(struct ts_node *node, const char *name);
 
 struct ts_node *ts_load(const char *fname);
 int ts_save(struct ts_node *tree, const char *fname);
+
 
 #ifdef __cplusplus
 }

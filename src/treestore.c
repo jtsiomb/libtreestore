@@ -93,9 +93,15 @@ fail:
 	return -1;
 }
 
+struct val_list_node {
+	struct ts_value val;
+	struct val_list_node *next;
+};
 
 int ts_set_value(struct ts_value *tsv, const char *str)
 {
+	char *endp;
+
 	if(tsv->str) {
 		ts_destroy_value(tsv);
 		if(ts_init_value(tsv) == -1) {
@@ -103,10 +109,58 @@ int ts_set_value(struct ts_value *tsv, const char *str)
 		}
 	}
 
+	tsv->type = TS_STRING;
 	if(!(tsv->str = malloc(strlen(str) + 1))) {
 		return -1;
 	}
 	strcpy(tsv->str, str);
+
+	/* try to parse the string and see if it fits any of the value types */
+	if(*str == '[' || *str == '{') {
+		/* try to parse as a vector */
+		struct val_list_node *list = 0, *tail = 0, *node;
+		int nelem = 0;
+		char endsym = *str++ + 2;	/* ']' is '[' + 2 and '}' is '{' + 2 */
+
+		while(*str && *str != endsym) {
+			float val = strtod(str, &endp);
+			if(endp == str || !(node = malloc(sizeof *node))) {
+				break;
+			}
+			ts_init_value(&node->val);
+			ts_set_valuef(&node->val, val);
+			node->next = 0;
+
+			if(list) {
+				tail->next = node;
+				tail = node;
+			} else {
+				list = tail = node;
+			}
+			++nelem;
+			str = endp;
+		}
+
+		if(nelem && (tsv->array = malloc(nelem * sizeof *tsv->array)) &&
+				(tsv->vec = malloc(nelem * sizeof *tsv->vec))) {
+			int idx = 0;
+			while(list) {
+				node = list;
+				list = list->next;
+
+				tsv->array[idx] = node->val;
+				tsv->vec[idx] = node->val.fnum;
+				++idx;
+				free(node);
+			}
+			tsv->type = TS_VECTOR;
+		}
+
+	} else if((tsv->fnum = strtod(str, &endp)), endp != str) {
+		/* it's a number I guess... */
+		tsv->type = TS_NUMBER;
+	}
+
 	return 0;
 }
 
@@ -226,7 +280,7 @@ int ts_set_valuefv_va(struct ts_value *tsv, int count, va_list ap)
 	return 0;
 }
 
-int ts_set_valuef(struct ts_value *tsv, int fnum)
+int ts_set_valuef(struct ts_value *tsv, float fnum)
 {
 	return ts_set_valuefv(tsv, 1, fnum);
 }
@@ -385,6 +439,51 @@ struct ts_attr *ts_get_attr(struct ts_node *node, const char *name)
 		attr = attr->next;
 	}
 	return 0;
+}
+
+const char *ts_get_attr_str(struct ts_node *node, const char *aname, const char *def_val)
+{
+	struct ts_attr *attr = ts_get_attr(node, aname);
+	if(!attr || !attr->val.str) {
+		return def_val;
+	}
+	return attr->val.str;
+}
+
+float ts_get_attr_num(struct ts_node *node, const char *aname, float def_val)
+{
+	struct ts_attr *attr = ts_get_attr(node, aname);
+	if(!attr || attr->val.type != TS_NUMBER) {
+		return def_val;
+	}
+	return attr->val.fnum;
+}
+
+int ts_get_attr_int(struct ts_node *node, const char *aname, int def_val)
+{
+	struct ts_attr *attr = ts_get_attr(node, aname);
+	if(!attr || attr->val.type != TS_NUMBER) {
+		return def_val;
+	}
+	return attr->val.inum;
+}
+
+float *ts_get_attr_vec(struct ts_node *node, const char *aname, float *def_val)
+{
+	struct ts_attr *attr = ts_get_attr(node, aname);
+	if(!attr || !attr->val.vec) {
+		return def_val;
+	}
+	return attr->val.vec;
+}
+
+struct ts_value *ts_get_attr_array(struct ts_node *node, const char *aname, struct ts_value *def_val)
+{
+	struct ts_attr *attr = ts_get_attr(node, aname);
+	if(!attr || !attr->val.array) {
+		return def_val;
+	}
+	return attr->val.array;
 }
 
 void ts_add_child(struct ts_node *node, struct ts_node *child)
