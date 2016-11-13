@@ -382,6 +382,8 @@ int ts_init_node(struct ts_node *node)
 
 void ts_destroy_node(struct ts_node *node)
 {
+	if(!node) return;
+
 	free(node->name);
 
 	while(node->attr_list) {
@@ -409,6 +411,8 @@ void ts_free_node(struct ts_node *node)
 
 void ts_free_tree(struct ts_node *tree)
 {
+	if(!tree) return;
+
 	while(tree->child_list) {
 		struct ts_node *child = tree->child_list;
 		tree->child_list = tree->child_list->next;
