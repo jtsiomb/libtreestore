@@ -42,19 +42,19 @@ int ts_copy_value(struct ts_value *dest, struct ts_value *src);
 int ts_set_value_str(struct ts_value *tsv, const char *str);
 
 /** set a ts_value from a list of integers */
-int ts_set_valuei_arr(struct ts_value *tsv, int count, int *arr);
+int ts_set_valuei_arr(struct ts_value *tsv, int count, const int *arr);
 int ts_set_valueiv(struct ts_value *tsv, int count, ...);
 int ts_set_valueiv_va(struct ts_value *tsv, int count, va_list ap);
 int ts_set_valuei(struct ts_value *tsv, int inum);	/**< equiv: ts_set_valueiv(val, 1, inum) */
 
 /** set a ts_value from a list of floats */
-int ts_set_valuef_arr(struct ts_value *tsv, int count, float *arr);
+int ts_set_valuef_arr(struct ts_value *tsv, int count, const float *arr);
 int ts_set_valuefv(struct ts_value *tsv, int count, ...);
 int ts_set_valuefv_va(struct ts_value *tsv, int count, va_list ap);
 int ts_set_valuef(struct ts_value *tsv, float fnum);	/**< equiv: ts_set_valuefv(val, 1, fnum) */
 
 /** set a ts_value from a list of ts_value pointers. they are deep-copied as per ts_copy_value */
-int ts_set_value_arr(struct ts_value *tsv, int count, struct ts_value *arr);
+int ts_set_value_arr(struct ts_value *tsv, int count, const struct ts_value *arr);
 int ts_set_valuev(struct ts_value *tsv, int count, ...);
 int ts_set_valuev_va(struct ts_value *tsv, int count, va_list ap);
 

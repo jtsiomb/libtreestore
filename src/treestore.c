@@ -99,12 +99,27 @@ fail:
 	return -1;
 }
 
+#define MAKE_NUMSTR_FUNC(typestr, fmt) \
+	static char *make_##typestr##str(int x) \
+	{ \
+		static char scrap[128]; \
+		char *str; \
+		int sz = snprintf(scrap, sizeof scrap, fmt, x); \
+		if(!(str = malloc(sz + 1))) return 0; \
+		sprintf(str, fmt, x); \
+		return str; \
+	}
+
+MAKE_NUMSTR_FUNC(int, "%d")
+MAKE_NUMSTR_FUNC(float, "%d")
+
+
 struct val_list_node {
 	struct ts_value val;
 	struct val_list_node *next;
 };
 
-int ts_set_value(struct ts_value *tsv, const char *str)
+int ts_set_value_str(struct ts_value *tsv, const char *str)
 {
 	char *endp;
 
@@ -172,6 +187,48 @@ int ts_set_value(struct ts_value *tsv, const char *str)
 	return 0;
 }
 
+int ts_set_valuei_arr(struct ts_value *tsv, int count, const int *arr)
+{
+	int i;
+
+	if(count < 1) return -1;
+	if(count == 1) {
+		if(!(tsv->str = make_intstr(*arr))) {
+			return -1;
+		}
+
+		tsv->type = TS_NUMBER;
+		tsv->fnum = (float)*arr;
+		tsv->inum = *arr;
+		return 0;
+	}
+
+	/* otherwise it's an array, we need to create the ts_value array, and
+	 * the simplified vector
+	 */
+	if(!(tsv->vec = malloc(count * sizeof *tsv->vec))) {
+		return -1;
+	}
+	tsv->vec_size = count;
+
+	for(i=0; i<count; i++) {
+		tsv->vec[i] = arr[i];
+	}
+
+	if(!(tsv->array = malloc(count * sizeof *tsv->array))) {
+		free(tsv->vec);
+	}
+	tsv->array_size = count;
+
+	for(i=0; i<count; i++) {
+		ts_init_value(tsv->array + i);
+		ts_set_valuef(tsv->array + i, arr[i]);
+	}
+
+	tsv->type = TS_VECTOR;
+	return 0;
+}
+
 int ts_set_valueiv(struct ts_value *tsv, int count, ...)
 {
 	int res;
@@ -182,50 +239,70 @@ int ts_set_valueiv(struct ts_value *tsv, int count, ...)
 	return res;
 }
 
-#define MAKE_NUMSTR_FUNC(typestr, fmt) \
-	static char *make_##typestr##str(int x) \
-	{ \
-		static char scrap[128]; \
-		char *str; \
-		int sz = snprintf(scrap, sizeof scrap, fmt, x); \
-		if(!(str = malloc(sz + 1))) return 0; \
-		sprintf(str, fmt, x); \
-		return str; \
-	}
-
-MAKE_NUMSTR_FUNC(int, "%d")
-MAKE_NUMSTR_FUNC(float, "%d")
-
-#define ARGS_ARE_INT	((enum ts_value_type)42)
-
 int ts_set_valueiv_va(struct ts_value *tsv, int count, va_list ap)
 {
+	int i, *vec;
+
 	if(count < 1) return -1;
 	if(count == 1) {
 		int num = va_arg(ap, int);
-		if(!(tsv->str = make_intstr(num))) {
-			return -1;
-		}
-
-		tsv->type = TS_NUMBER;
-		tsv->inum = num;
-		tsv->fnum = (float)num;
+		ts_set_valuei(tsv, num);
 		return 0;
 	}
 
-	/* otherwise it's an array, let ts_set_valuefv_va handle it */
-	/* XXX: va_arg will need to be called with int instead of float. set a special
-	 *      value to the type field before calling this, to signify that.
-	 */
-	tsv->type = ARGS_ARE_INT;
-	return ts_set_valuefv_va(tsv, count, ap);
+	vec = alloca(count * sizeof *vec);
+	for(i=0; i<count; i++) {
+		vec[i] = va_arg(ap, int);
+	}
+	return ts_set_valuei_arr(tsv, count, vec);
 }
 
 int ts_set_valuei(struct ts_value *tsv, int inum)
 {
-	return ts_set_valueiv(tsv, 1, inum);
+	return ts_set_valuei_arr(tsv, 1, &inum);
 }
 
+int ts_set_valuef_arr(struct ts_value *tsv, int count, const float *arr)
+{
+	int i;
+
+	if(count < 1) return -1;
+	if(count == 1) {
+		if(!(tsv->str = make_floatstr(*arr))) {
+			return -1;
+		}
+
+		tsv->type = TS_NUMBER;
+		tsv->fnum = *arr;
+		tsv->inum = (int)*arr;
+		return 0;
+	}
+
+	/* otherwise it's an array, we need to create the ts_value array, and
+	 * the simplified vector
+	 */
+	if(!(tsv->vec = malloc(count * sizeof *tsv->vec))) {
+		return -1;
+	}
+	tsv->vec_size = count;
+
+	for(i=0; i<count; i++) {
+		tsv->vec[i] = arr[i];
+	}
+
+	if(!(tsv->array = malloc(count * sizeof *tsv->array))) {
+		free(tsv->vec);
+	}
+	tsv->array_size = count;
+
+	for(i=0; i<count; i++) {
+		ts_init_value(tsv->array + i);
+		ts_set_valuef(tsv->array + i, arr[i]);
+	}
+
+	tsv->type = TS_VECTOR;
+	return 0;
+}
 
 int ts_set_valuefv(struct ts_value *tsv, int count, ...)
 {
@@ -240,59 +317,50 @@ int ts_set_valuefv(struct ts_value *tsv, int count, ...)
 int ts_set_valuefv_va(struct ts_value *tsv, int count, va_list ap)
 {
 	int i;
+	float *vec;
 
 	if(count < 1) return -1;
 	if(count == 1) {
 		float num = va_arg(ap, double);
-		if(!(tsv->str = make_floatstr(num))) {
-			return -1;
-		}
-
-		tsv->type = TS_NUMBER;
-		tsv->fnum = num;
-		tsv->inum = (int)num;
+		ts_set_valuef(tsv, num);
 		return 0;
 	}
 
-	/* otherwise it's an array, we need to create the ts_value array, and
-	 * the simplified vector
-	 */
-	if(!(tsv->vec = malloc(count * sizeof *tsv->vec))) {
-		return -1;
-	}
-	tsv->vec_size = count;
-
+	vec = alloca(count * sizeof *vec);
 	for(i=0; i<count; i++) {
-		if(tsv->type == ARGS_ARE_INT) {	/* only when called by ts_set_valueiv_va */
-			tsv->vec[i] = (float)va_arg(ap, int);
-		} else {
-			tsv->vec[i] = va_arg(ap, double);
-		}
+		vec[i] = va_arg(ap, double);
 	}
-
-	if(!(tsv->array = malloc(count * sizeof *tsv->array))) {
-		free(tsv->vec);
-	}
-	tsv->array_size = count;
-
-	for(i=0; i<count; i++) {
-		ts_init_value(tsv->array + i);
-		if(tsv->type == ARGS_ARE_INT) {	/* only when called by ts_set_valueiv_va */
-			ts_set_valuei(tsv->array + i, (int)tsv->vec[i]);
-		} else {
-			ts_set_valuef(tsv->array + i, tsv->vec[i]);
-		}
-	}
-
-	tsv->type = TS_VECTOR;
-	return 0;
+	return ts_set_valuef_arr(tsv, count, vec);
 }
 
 int ts_set_valuef(struct ts_value *tsv, float fnum)
 {
-	return ts_set_valuefv(tsv, 1, fnum);
+	return ts_set_valuef_arr(tsv, 1, &fnum);
 }
 
+int ts_set_value_arr(struct ts_value *tsv, int count, const struct ts_value *arr)
+{
+	int i;
+
+	if(count <= 1) return -1;
+
+	if((tsv->array = malloc(count * sizeof *tsv->array))) {
+		return -1;
+	}
+	tsv->array_size = count;
+
+	for(i=0; i<count; i++) {
+		if(ts_copy_value(tsv->array + i, (struct ts_value*)arr + i) == -1) {
+			while(--i >= 0) {
+				ts_destroy_value(tsv->array + i);
+			}
+			free(tsv->array);
+			tsv->array = 0;
+			return -1;
+		}
+	}
+	return 0;
+}
 
 int ts_set_valuev(struct ts_value *tsv, int count, ...)
 {
@@ -317,7 +385,14 @@ int ts_set_valuev_va(struct ts_value *tsv, int count, va_list ap)
 
 	for(i=0; i<count; i++) {
 		struct ts_value *src = va_arg(ap, struct ts_value*);
-		ts_copy_value(tsv->array + i, src);
+		if(ts_copy_value(tsv->array + i, src) == -1) {
+			while(--i >= 0) {
+				ts_destroy_value(tsv->array + i);
+			}
+			free(tsv->array);
+			tsv->array = 0;
+			return -1;
+		}
 	}
 	return 0;
 }
