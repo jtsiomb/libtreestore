@@ -170,11 +170,14 @@ static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 	int nval = 0;
 
 	while((type = next_token(pst)) != -1) {
+		ts_init_value(values + nval);
 		if(read_value(pst, type, values + nval) == -1) {
 			return -1;
 		}
 		if(nval < 31) {
 			++nval;
+		} else {
+			ts_destroy_value(values + nval);
 		}
 
 		type = next_token(pst);

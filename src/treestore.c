@@ -99,8 +99,8 @@ fail:
 	return -1;
 }
 
-#define MAKE_NUMSTR_FUNC(typestr, fmt) \
-	static char *make_##typestr##str(int x) \
+#define MAKE_NUMSTR_FUNC(type, fmt) \
+	static char *make_##type##str(type x) \
 	{ \
 		static char scrap[128]; \
 		char *str; \
@@ -111,7 +111,7 @@ fail:
 	}
 
 MAKE_NUMSTR_FUNC(int, "%d")
-MAKE_NUMSTR_FUNC(float, "%d")
+MAKE_NUMSTR_FUNC(float, "%g")
 
 
 struct val_list_node {
@@ -340,7 +340,7 @@ int ts_set_valuef(struct ts_value *tsv, float fnum)
 
 int ts_set_value_arr(struct ts_value *tsv, int count, const struct ts_value *arr)
 {
-	int i;
+	int i, allnum = 1;
 
 	if(count <= 1) return -1;
 
@@ -350,6 +350,9 @@ int ts_set_value_arr(struct ts_value *tsv, int count, const struct ts_value *arr
 	tsv->array_size = count;
 
 	for(i=0; i<count; i++) {
+		if(arr[i].type != TS_NUMBER) {
+			allnum = 0;
+		}
 		if(ts_copy_value(tsv->array + i, (struct ts_value*)arr + i) == -1) {
 			while(--i >= 0) {
 				ts_destroy_value(tsv->array + i);
@@ -358,6 +361,20 @@ int ts_set_value_arr(struct ts_value *tsv, int count, const struct ts_value *arr
 			tsv->array = 0;
 			return -1;
 		}
+	}
+
+	if(allnum) {
+		if(!(tsv->vec = malloc(count * sizeof *tsv->vec))) {
+			ts_destroy_value(tsv);
+			return -1;
+		}
+		tsv->type = TS_VECTOR;
+
+		for(i=0; i<count; i++) {
+			tsv->vec[i] = tsv->array[i].fnum;
+		}
+	} else {
+		tsv->type = TS_ARRAY;
 	}
 	return 0;
 }
