@@ -191,7 +191,7 @@ static int next_token(struct parser *pst)
 	if(isalpha(c)) {
 		// token is an identifier
 		ptr = pst->token + 1;
-		while((c = fgetc(pst->fp)) != -1 && isalnum(c)) {
+		while((c = fgetc(pst->fp)) != -1 && (isalnum(c) || c == '_')) {
 			if(ptr < bend) *ptr++ = c;
 		}
 		if(c != -1) ungetc(c, pst->fp);

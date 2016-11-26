@@ -122,6 +122,18 @@ struct ts_node *ts_get_child(struct ts_node *node, const char *name);
 struct ts_node *ts_load(const char *fname);
 int ts_save(struct ts_node *tree, const char *fname);
 
+struct ts_attr *ts_lookup(struct ts_node *root, const char *path);
+const char *ts_lookup_str(struct ts_node *root, const char *path,
+		const char *def_val TS_DEFVAL(0));
+float ts_lookup_num(struct ts_node *root, const char *path,
+		float def_val TS_DEFVAL(0.0f));
+int ts_lookup_int(struct ts_node *root, const char *path,
+		int def_val TS_DEFVAL(0));
+float *ts_lookup_vec(struct ts_node *root, const char *path,
+		float *def_val TS_DEFVAL(0));
+struct ts_value *ts_lookup_array(struct ts_node *root, const char *path,
+		struct ts_value *def_val TS_DEFVAL(0));
+
 
 #ifdef __cplusplus
 }

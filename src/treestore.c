@@ -4,6 +4,12 @@
 #include <errno.h>
 #include "treestore.h"
 
+#ifdef WIN32
+#include <malloc.h>
+#else
+#include <alloca.h>
+#endif
+
 struct ts_node *ts_text_load(FILE *fp);
 int ts_text_save(struct ts_node *tree, FILE *fp);
 
@@ -195,7 +201,7 @@ int ts_set_valueiv_va(struct ts_value *tsv, int count, va_list ap)
 	if(count < 1) return -1;
 	if(count == 1) {
 		int num = va_arg(ap, int);
-		if(!(tsv->str = make_intstr(tsv->inum))) {
+		if(!(tsv->str = make_intstr(num))) {
 			return -1;
 		}
 
@@ -235,14 +241,14 @@ int ts_set_valuefv_va(struct ts_value *tsv, int count, va_list ap)
 
 	if(count < 1) return -1;
 	if(count == 1) {
-		int num = va_arg(ap, int);
-		if(!(tsv->str = make_floatstr(tsv->inum))) {
+		float num = va_arg(ap, double);
+		if(!(tsv->str = make_floatstr(num))) {
 			return -1;
 		}
 
 		tsv->type = TS_NUMBER;
-		tsv->inum = num;
-		tsv->fnum = (float)num;
+		tsv->fnum = num;
+		tsv->inum = (int)num;
 		return 0;
 	}
 
@@ -568,4 +574,80 @@ int ts_save(struct ts_node *tree, const char *fname)
 	res = ts_text_save(tree, fp);
 	fclose(fp);
 	return res;
+}
+
+static const char *pathtok(const char *path, char *tok)
+{
+	int len;
+	const char *dot = strchr(path, '.');
+	if(!dot) {
+		strcpy(tok, path);
+		return 0;
+	}
+
+	len = dot - path;
+	memcpy(tok, path, len);
+	tok[len] = 0;
+	return dot + 1;
+}
+
+struct ts_attr *ts_lookup(struct ts_node *node, const char *path)
+{
+	char *name = alloca(strlen(path) + 1);
+
+	if(!node) return 0;
+
+	if(!(path = pathtok(path, name)) || strcmp(name, node->name) != 0) {
+		return 0;
+	}
+
+	while((path = pathtok(path, name)) && (node = ts_get_child(node, name)));
+
+	if(path || !node) return 0;
+	return ts_get_attr(node, name);
+}
+
+const char *ts_lookup_str(struct ts_node *root, const char *path, const char *def_val)
+{
+	struct ts_attr *attr = ts_lookup(root, path);
+	if(!attr || !attr->val.str) {
+		return def_val;
+	}
+	return attr->val.str;
+}
+
+float ts_lookup_num(struct ts_node *root, const char *path, float def_val)
+{
+	struct ts_attr *attr = ts_lookup(root, path);
+	if(!attr || attr->val.type != TS_NUMBER) {
+		return def_val;
+	}
+	return attr->val.fnum;
+}
+
+int ts_lookup_int(struct ts_node *root, const char *path, int def_val)
+{
+	struct ts_attr *attr = ts_lookup(root, path);
+	if(!attr || attr->val.type != TS_NUMBER) {
+		return def_val;
+	}
+	return attr->val.inum;
+}
+
+float *ts_lookup_vec(struct ts_node *root, const char *path, float *def_val)
+{
+	struct ts_attr *attr = ts_lookup(root, path);
+	if(!attr || !attr->val.vec) {
+		return def_val;
+	}
+	return attr->val.vec;
+}
+
+struct ts_value *ts_lookup_array(struct ts_node *node, const char *path, struct ts_value *def_val)
+{
+	struct ts_attr *attr = ts_lookup(node, path);
+	if(!attr || !attr->val.array) {
+		return def_val;
+	}
+	return attr->val.array;
 }
