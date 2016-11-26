@@ -64,6 +64,33 @@ err:
 	return node;
 }
 
+static int read_value(struct parser *pst, int toktype, struct ts_value *val)
+{
+	switch(toktype) {
+	case TOK_NUM:
+		ts_set_valuef(val, atof(pst->token));
+		break;
+
+	case TOK_SYM:
+		if(pst->token[0] == '[' || pst->token[0] == '{') {
+			char endsym = pst->token[0] + 2; /* end symbol is dist 2 from either '[' or '{' */
+			if(read_array(pst, val, endsym) == -1) {
+				return -1;
+			}
+		} else {
+			fprintf(stderr, "read_node: unexpected rhs symbol: %c\n", pst->token[0]);
+		}
+		break;
+
+	case TOK_ID:
+	case TOK_STR:
+	default:
+		ts_set_value_str(val, pst->token);
+	}
+
+	return 0;
+}
+
 static struct ts_node *read_node(struct parser *pst)
 {
 	int type;
@@ -98,28 +125,11 @@ static struct ts_node *read_node(struct parser *pst)
 				goto err;
 			}
 
-			switch(type) {
-			case TOK_NUM:
-				ts_set_valuef(&attr->val, atof(pst->token));
-				break;
-
-			case TOK_SYM:
-				if(pst->token[0] == '[' || pst->token[0] == '{') {
-					char endsym = pst->token[0] + 2; /* end symbol is dist 2 from either '[' or '{' */
-					if(read_array(pst, &attr->val, endsym) == -1) {
-						goto err;
-					}
-				} else {
-					fprintf(stderr, "read_node: unexpected rhs symbol: %c\n", pst->token[0]);
-				}
-				break;
-
-			case TOK_ID:
-			case TOK_STR:
-			default:
-				ts_set_value(&attr->val, pst->token);
+			if(read_value(pst, type, &attr->val) == -1) {
+				ts_free_attr(attr);
+				fprintf(stderr, "failed to read value\n");
+				goto err;
 			}
-
 			attr->name = id;
 			ts_add_attr(node, attr);
 
@@ -155,8 +165,33 @@ err:
 
 static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 {
-	// TODO implement
-	return -1;
+	int type;
+	struct ts_value values[32];
+	int nval = 0;
+
+	while((type = next_token(pst)) != -1) {
+		if(read_value(pst, type, values + nval) == -1) {
+			return -1;
+		}
+		if(nval < 31) {
+			++nval;
+		}
+
+		type = next_token(pst);
+		if(!(type == TOK_SYM && (pst->token[0] == ',' || pst->token[0] == endsym))) {
+			fprintf(stderr, "read_array: expected comma or end symbol ('%c')\n", endsym);
+			return -1;
+		}
+		if(pst->token[0] == endsym) {
+			break;	/* we're done */
+		}
+	}
+
+	if(!nval) {
+		return -1;
+	}
+
+	return ts_set_value_arr(tsv, nval, values);
 }
 
 static int next_token(struct parser *pst)

@@ -38,20 +38,23 @@ void ts_free_value(struct ts_value *tsv);	/**< also calls ts_destroy_value */
 /** perform a deep-copy of a ts_value */
 int ts_copy_value(struct ts_value *dest, struct ts_value *src);
 
-/** ts_set_value will try to parse the string and initialize the value type fields */
-int ts_set_value(struct ts_value *tsv, const char *str);
+/** set a ts_value as a string */
+int ts_set_value_str(struct ts_value *tsv, const char *str);
 
 /** set a ts_value from a list of integers */
+int ts_set_valuei_arr(struct ts_value *tsv, int count, int *arr);
 int ts_set_valueiv(struct ts_value *tsv, int count, ...);
 int ts_set_valueiv_va(struct ts_value *tsv, int count, va_list ap);
 int ts_set_valuei(struct ts_value *tsv, int inum);	/**< equiv: ts_set_valueiv(val, 1, inum) */
 
 /** set a ts_value from a list of floats */
+int ts_set_valuef_arr(struct ts_value *tsv, int count, float *arr);
 int ts_set_valuefv(struct ts_value *tsv, int count, ...);
 int ts_set_valuefv_va(struct ts_value *tsv, int count, va_list ap);
 int ts_set_valuef(struct ts_value *tsv, float fnum);	/**< equiv: ts_set_valuefv(val, 1, fnum) */
 
 /** set a ts_value from a list of ts_value pointers. they are deep-copied as per ts_copy_value */
+int ts_set_value_arr(struct ts_value *tsv, int count, struct ts_value *arr);
 int ts_set_valuev(struct ts_value *tsv, int count, ...);
 int ts_set_valuev_va(struct ts_value *tsv, int count, va_list ap);
 

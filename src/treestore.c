@@ -121,6 +121,7 @@ int ts_set_value(struct ts_value *tsv, const char *str)
 	}
 	strcpy(tsv->str, str);
 
+#if 0
 	/* try to parse the string and see if it fits any of the value types */
 	if(*str == '[' || *str == '{') {
 		/* try to parse as a vector */
@@ -166,6 +167,7 @@ int ts_set_value(struct ts_value *tsv, const char *str)
 		/* it's a number I guess... */
 		tsv->type = TS_NUMBER;
 	}
+#endif
 
 	return 0;
 }
