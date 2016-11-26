@@ -344,7 +344,7 @@ int ts_set_value_arr(struct ts_value *tsv, int count, const struct ts_value *arr
 
 	if(count <= 1) return -1;
 
-	if((tsv->array = malloc(count * sizeof *tsv->array))) {
+	if(!(tsv->array = malloc(count * sizeof *tsv->array))) {
 		return -1;
 	}
 	tsv->array_size = count;
@@ -378,7 +378,7 @@ int ts_set_valuev_va(struct ts_value *tsv, int count, va_list ap)
 
 	if(count <= 1) return -1;
 
-	if((tsv->array = malloc(count * sizeof *tsv->array))) {
+	if(!(tsv->array = malloc(count * sizeof *tsv->array))) {
 		return -1;
 	}
 	tsv->array_size = count;

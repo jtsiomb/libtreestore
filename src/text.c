@@ -215,9 +215,12 @@ static int next_token(struct parser *pst)
 
 	if(isdigit(c)) {
 		// token is a number
+		int found_dot = 0;
 		ptr = pst->token + 1;
-		while((c = fgetc(pst->fp)) != -1 && isdigit(c)) {
+		while((c = fgetc(pst->fp)) != -1 &&
+				(isdigit(c) || (c == '.' && !found_dot))) {
 			if(ptr < bend) *ptr++ = c;
+			if(c == '.') found_dot = 1;
 		}
 		if(c != -1) ungetc(c, pst->fp);
 		*ptr = 0;
