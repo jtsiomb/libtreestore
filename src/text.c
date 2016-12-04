@@ -216,7 +216,7 @@ static int next_token(struct parser *pst)
 	pst->token[0] = c;
 	pst->token[1] = 0;
 
-	if(isdigit(c)) {
+	if(isdigit(c) || c == '-' || c == '+') {
 		// token is a number
 		int found_dot = 0;
 		ptr = pst->token + 1;
