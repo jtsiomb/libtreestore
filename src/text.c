@@ -276,6 +276,7 @@ int ts_text_save(struct ts_node *tree, FILE *fp)
 	}
 
 	fprintf(fp, "%s}\n", indent(lvl));
+	return 0;
 }
 
 static void print_attr(struct ts_attr *attr, FILE *fp, int level)
