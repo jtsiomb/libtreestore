@@ -31,8 +31,8 @@ endif()
 target_include_directories(treestore PUBLIC include)
 target_include_directories(treestore-static PUBLIC include)
 
-target_link_libraries(treestore expat)
-target_link_libraries(treestore-static expat)
+target_link_libraries(treestore)
+target_link_libraries(treestore-static)
 
 install(TARGETS treestore
 	RUNTIME DESTINATION bin
