@@ -3,12 +3,12 @@
 #include <string.h>
 #include <ctype.h>
 #include "treestore.h"
+#include "dynarr.h"
 
-#define MAX_TOKEN_SIZE	512
 struct parser {
 	FILE *fp;
 	int nline;
-	char token[MAX_TOKEN_SIZE];
+	char *token;
 };
 
 enum { TOK_SYM, TOK_ID, TOK_NUM, TOK_STR };
@@ -48,19 +48,26 @@ struct ts_node *ts_text_load(FILE *fp)
 
 	pstate.fp = fp;
 	pstate.nline = 0;
+	if(!(pstate.token = ts_dynarr_alloc(0, 1))) {
+		perror("failed to allocate token string");
+		return 0;
+	}
 
 	EXPECT(TOK_ID);
 	if(!(root_name = strdup(pst->token))) {
 		perror("failed to allocate root node name");
+		ts_dynarr_free(pst->token);
 		return 0;
 	}
 	EXPECT_SYM('{');
 	if(!(node = read_node(pst))) {
+		ts_dynarr_free(pst->token);
 		return 0;
 	}
 	node->name = root_name;
 
 err:
+	ts_dynarr_free(pst->token);
 	return node;
 }
 
@@ -200,7 +207,8 @@ static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 static int next_token(struct parser *pst)
 {
 	int c;
-	char *ptr, *bend = pst->token + MAX_TOKEN_SIZE - 1;	/* leave space for the terminator */
+
+	DYNARR_CLEAR(pst->token);
 
 	// skip whitespace
 	while((c = fgetc(pst->fp)) != -1) {
@@ -213,43 +221,38 @@ static int next_token(struct parser *pst)
 	}
 	if(c == -1) return -1;
 
-	pst->token[0] = c;
-	pst->token[1] = 0;
+	DYNARR_STRPUSH(pst->token, c);
 
 	if(isdigit(c) || c == '-' || c == '+') {
 		// token is a number
 		int found_dot = 0;
-		ptr = pst->token + 1;
 		while((c = fgetc(pst->fp)) != -1 &&
 				(isdigit(c) || (c == '.' && !found_dot))) {
-			if(ptr < bend) *ptr++ = c;
+			DYNARR_STRPUSH(pst->token, c);
 			if(c == '.') found_dot = 1;
 		}
 		if(c != -1) ungetc(c, pst->fp);
-		*ptr = 0;
 		return TOK_NUM;
 	}
 	if(isalpha(c)) {
 		// token is an identifier
-		ptr = pst->token + 1;
 		while((c = fgetc(pst->fp)) != -1 && (isalnum(c) || c == '_')) {
-			if(ptr < bend) *ptr++ = c;
+			DYNARR_STRPUSH(pst->token, c);
 		}
 		if(c != -1) ungetc(c, pst->fp);
-		*ptr = 0;
 		return TOK_ID;
 	}
 	if(c == '"') {
 		// token is a string constant
-		ptr = pst->token;
-		while((c = fgetc(pst->fp)) != -1 && c != '"' && c != '\r' && c != '\n') {
-			if(ptr < bend) *ptr++ = c;
+		// remove the opening quote
+		DYNARR_STRPOP(pst->token);
+		while((c = fgetc(pst->fp)) != -1 && c != '"') {
+			DYNARR_STRPUSH(pst->token, c);
+			if(c == '\n') ++pst->nline;
 		}
-		if(c == '\n') ++pst->nline;
 		if(c != '"') {
 			return -1;
 		}
-		*ptr = 0;
 		return TOK_STR;
 	}
 	return TOK_SYM;
