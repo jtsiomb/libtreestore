@@ -1,4 +1,4 @@
-LIBRARY treestore
+LIBRARY libtreestore
 EXPORTS
 	ts_init_value
 	ts_destroy_value
