@@ -33,7 +33,6 @@ it, under the terms of the MIT/X11 license. See LICENSE for detauls.
 
 Issues
 ------
-
 At the moment only the text format has been implemented.
 
 More info soon...

@@ -174,7 +174,8 @@ static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 {
 	int type;
 	struct ts_value values[32];
-	int nval = 0;
+	int i, nval = 0;
+	int res;
 
 	while((type = next_token(pst)) != -1) {
 		ts_init_value(values + nval);
@@ -201,7 +202,12 @@ static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 		return -1;
 	}
 
-	return ts_set_value_arr(tsv, nval, values);
+	res = ts_set_value_arr(tsv, nval, values);
+
+	for(i=0; i<nval; i++) {
+		ts_destroy_value(values + i);
+	}
+	return res;
 }
 
 static int next_token(struct parser *pst)
