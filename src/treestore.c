@@ -31,6 +31,7 @@ void ts_destroy_value(struct ts_value *tsv)
 	for(i=0; i<tsv->array_size; i++) {
 		ts_destroy_value(tsv->array + i);
 	}
+	free(tsv->array);
 }
 
 
