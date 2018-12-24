@@ -10,8 +10,12 @@
 #include <alloca.h>
 #endif
 
-struct ts_node *ts_text_load(FILE *fp);
-int ts_text_save(struct ts_node *tree, FILE *fp);
+struct ts_node *ts_text_load(struct ts_io *io);
+int ts_text_save(struct ts_node *tree, struct ts_io *io);
+
+static size_t io_read(void *buf, size_t bytes, void *uptr);
+static size_t io_write(void *buf, size_t bytes, void *uptr);
+
 
 /* ---- ts_value implementation ---- */
 
@@ -652,9 +656,23 @@ struct ts_node *ts_load(const char *fname)
 		return 0;
 	}
 
-	root = ts_text_load(fp);
+	root = ts_load_file(fp);
 	fclose(fp);
 	return root;
+}
+
+struct ts_node *ts_load_file(FILE *fp)
+{
+	struct ts_io io = {0};
+	io.data = fp;
+	io.read = io_read;
+
+	return ts_load_io(&io);
+}
+
+struct ts_node *ts_load_io(struct ts_io *io)
+{
+	return ts_text_load(io);
 }
 
 int ts_save(struct ts_node *tree, const char *fname)
@@ -666,9 +684,23 @@ int ts_save(struct ts_node *tree, const char *fname)
 		fprintf(stderr, "ts_save: failed to open file: %s: %s\n", fname, strerror(errno));
 		return 0;
 	}
-	res = ts_text_save(tree, fp);
+	res = ts_save_file(tree, fp);
 	fclose(fp);
 	return res;
+}
+
+int ts_save_file(struct ts_node *tree, FILE *fp)
+{
+	struct ts_io io = {0};
+	io.data = fp;
+	io.write = io_write;
+
+	return ts_save_io(tree, &io);
+}
+
+int ts_save_io(struct ts_node *tree, struct ts_io *io)
+{
+	return ts_text_save(tree, io);
 }
 
 static const char *pathtok(const char *path, char *tok)
@@ -745,4 +777,14 @@ struct ts_value *ts_lookup_array(struct ts_node *node, const char *path, struct 
 		return def_val;
 	}
 	return attr->val.array;
+}
+
+static size_t io_read(void *buf, size_t bytes, void *uptr)
+{
+	return fread(buf, 1, bytes, uptr);
+}
+
+static size_t io_write(void *buf, size_t bytes, void *uptr)
+{
+	return fwrite(buf, 1, bytes, uptr);
 }

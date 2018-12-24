@@ -4,7 +4,7 @@ project(libtreestore)
 include(GNUInstallDirs)
 
 set(SO_MAJOR 0)
-set(SO_MINOR 1)
+set(SO_MINOR 2)
 
 file(GLOB src "src/*.c")
 file(GLOB hdr "src/*.h")

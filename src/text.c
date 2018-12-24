@@ -2,13 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 #include "treestore.h"
 #include "dynarr.h"
 
 struct parser {
-	FILE *fp;
+	struct ts_io *io;
 	int nline;
 	char *token;
+	int nextc;
 };
 
 enum { TOK_SYM, TOK_ID, TOK_NUM, TOK_STR };
@@ -17,8 +19,8 @@ static struct ts_node *read_node(struct parser *pstate);
 static int read_array(struct parser *pstate, struct ts_value *tsv, char endsym);
 static int next_token(struct parser *pstate);
 
-static void print_attr(struct ts_attr *attr, FILE *fp, int level);
-static void print_value(struct ts_value *value, FILE *fp);
+static int print_attr(struct ts_attr *attr, struct ts_io *io, int level);
+static char *value_to_str(struct ts_value *value);
 static int tree_level(struct ts_node *n);
 static const char *indent(int x);
 static const char *toktypestr(int type);
@@ -40,14 +42,15 @@ static const char *toktypestr(int type);
 	} while(0)
 
 
-struct ts_node *ts_text_load(FILE *fp)
+struct ts_node *ts_text_load(struct ts_io *io)
 {
 	char *root_name;
 	struct parser pstate, *pst = &pstate;
 	struct ts_node *node = 0;
 
-	pstate.fp = fp;
+	pstate.io = io;
 	pstate.nline = 0;
+	pstate.nextc = -1;
 	if(!(pstate.token = ts_dynarr_alloc(0, 1))) {
 		perror("failed to allocate token string");
 		return 0;
@@ -210,6 +213,27 @@ static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 	return res;
 }
 
+static int nextchar(struct parser *pst)
+{
+	char c;
+
+	if(pst->nextc >= 0) {
+		c = pst->nextc;
+		pst->nextc = -1;
+	} else {
+		if(pst->io->read(&c, 1, pst->io->data) < 1) {
+			return -1;
+		}
+	}
+	return c;
+}
+
+static void ungetchar(char c, struct parser *pst)
+{
+	assert(pst->nextc == -1);
+	pst->nextc = c;
+}
+
 static int next_token(struct parser *pst)
 {
 	int c;
@@ -217,9 +241,9 @@ static int next_token(struct parser *pst)
 	DYNARR_CLEAR(pst->token);
 
 	// skip whitespace
-	while((c = fgetc(pst->fp)) != -1) {
+	while((c = nextchar(pst)) != -1) {
 		if(c == '#') { // skip to end of line
-			while((c = fgetc(pst->fp)) != -1 && c != '\n');
+			while((c = nextchar(pst)) != -1 && c != '\n');
 			if(c == -1) return -1;
 		}
 		if(!isspace(c)) break;
@@ -232,27 +256,27 @@ static int next_token(struct parser *pst)
 	if(isdigit(c) || c == '-' || c == '+') {
 		// token is a number
 		int found_dot = 0;
-		while((c = fgetc(pst->fp)) != -1 &&
+		while((c = nextchar(pst)) != -1 &&
 				(isdigit(c) || (c == '.' && !found_dot))) {
 			DYNARR_STRPUSH(pst->token, c);
 			if(c == '.') found_dot = 1;
 		}
-		if(c != -1) ungetc(c, pst->fp);
+		if(c != -1) ungetchar(c, pst);
 		return TOK_NUM;
 	}
 	if(isalpha(c)) {
 		// token is an identifier
-		while((c = fgetc(pst->fp)) != -1 && (isalnum(c) || c == '_')) {
+		while((c = nextchar(pst)) != -1 && (isalnum(c) || c == '_')) {
 			DYNARR_STRPUSH(pst->token, c);
 		}
-		if(c != -1) ungetc(c, pst->fp);
+		if(c != -1) ungetchar(c, pst);
 		return TOK_ID;
 	}
 	if(c == '"') {
 		// token is a string constant
 		// remove the opening quote
 		DYNARR_STRPOP(pst->token);
-		while((c = fgetc(pst->fp)) != -1 && c != '"') {
+		while((c = nextchar(pst)) != -1 && c != '"') {
 			DYNARR_STRPUSH(pst->token, c);
 			if(c == '\n') ++pst->nline;
 		}
@@ -264,72 +288,134 @@ static int next_token(struct parser *pst)
 	return TOK_SYM;
 }
 
-int ts_text_save(struct ts_node *tree, FILE *fp)
+int ts_text_save(struct ts_node *tree, struct ts_io *io)
 {
+	char *buf;
 	struct ts_node *c;
 	struct ts_attr *attr;
 	int lvl = tree_level(tree);
+	int sz, res = -1;
 
-	fprintf(fp, "%s%s {\n", indent(lvl), tree->name);
+	if(!(buf = malloc(lvl + strlen(tree->name) + 4))) {
+		perror("ts_text_save failed to allocate buffer");
+		goto end;
+	}
+
+	sz = sprintf(buf, "%s%s {\n", indent(lvl), tree->name);
+	if(io->write(buf, sz, io->data) < sz) {
+		goto end;
+	}
 
 	attr = tree->attr_list;
 	while(attr) {
-		print_attr(attr, fp, lvl);
+		if(print_attr(attr, io, lvl) == -1) {
+			goto end;
+		}
 		attr = attr->next;
 	}
 
 	c = tree->child_list;
 	while(c) {
-		ts_text_save(c, fp);
+		if(ts_text_save(c, io) == -1) {
+			goto end;
+		}
 		c = c->next;
 	}
 
-	fprintf(fp, "%s}\n", indent(lvl));
+	sz = sprintf(buf, "%s}\n", indent(lvl));
+	if(io->write(buf, sz, io->data) < sz) {
+		goto end;
+	}
+	res = 0;
+end:
+	free(buf);
+	return res;
+}
+
+static int print_attr(struct ts_attr *attr, struct ts_io *io, int level)
+{
+	char *buf, *val;
+	int sz;
+
+	if(!(val = value_to_str(&attr->val))) {
+		return -1;
+	}
+
+	if(!(buf = malloc(level + strlen(attr->name) + ts_dynarr_size(val) + 4))) {
+		perror("print_attr: failed to allocate name buffer");
+		ts_dynarr_free(val);
+	}
+
+	sz = sprintf(buf, "%s%s = %s\n", indent(level + 1), attr->name, val);
+	if(io->write(buf, sz, io->data) < sz) {
+		ts_dynarr_free(val);
+		free(buf);
+		return -1;
+	}
+	ts_dynarr_free(val);
+	free(buf);
 	return 0;
 }
 
-static void print_attr(struct ts_attr *attr, FILE *fp, int level)
+static char *append_dynstr(char *dest, char *s)
 {
-	fprintf(fp, "%s%s = ", indent(level + 1), attr->name);
-	print_value(&attr->val, fp);
-	fputc('\n', fp);
+	while(*s) {
+		DYNARR_STRPUSH(dest, *s++);
+	}
+	return dest;
 }
 
-static void print_value(struct ts_value *value, FILE *fp)
+static char *value_to_str(struct ts_value *value)
 {
-	int i;
+	int i, sz;
+	char buf[128];
+	char *str, *valstr;
+
+	if(!(str = ts_dynarr_alloc(0, 1))) {
+		return 0;
+	}
 
 	switch(value->type) {
 	case TS_NUMBER:
-		fprintf(fp, "%g", value->fnum);
+		sprintf(buf, "%g", value->fnum);
+		append_dynstr(str, buf);
 		break;
 
 	case TS_VECTOR:
-		fputc('[', fp);
+		DYNARR_STRPUSH(str, '[');
 		for(i=0; i<value->vec_size; i++) {
 			if(i == 0) {
-				fprintf(fp, "%g", value->vec[i]);
+				sprintf(buf, "%g", value->vec[i]);
 			} else {
-				fprintf(fp, ", %g", value->vec[i]);
+				sprintf(buf, ", %g", value->vec[i]);
 			}
+			append_dynstr(str, buf);
 		}
-		fputc(']', fp);
+		DYNARR_STRPUSH(str, ']');
 		break;
 
 	case TS_ARRAY:
-		fputc('[', fp);
+		DYNARR_STRPUSH(str, '[');
 		for(i=0; i<value->array_size; i++) {
 			if(i > 0) {
-				fprintf(fp, ", ");
+				append_dynstr(str, ", ");
 			}
-			print_value(value->array + i, fp);
+			if(!(valstr = value_to_str(value->array + i))) {
+				ts_dynarr_free(str);
+				return 0;
+			}
+			append_dynstr(str, valstr);
+			ts_dynarr_free(valstr);
 		}
-		fputc(']', fp);
+		DYNARR_STRPUSH(str, ']');
 		break;
 
 	default:
-		fprintf(fp, "\"%s\"", value->str);
+		sprintf(buf, "\"%s\"", value->str);
+		append_dynstr(str, buf);
 	}
+
+	return str;
 }
 
 static int tree_level(struct ts_node *n)
