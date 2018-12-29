@@ -1,6 +1,8 @@
 #ifndef TREESTORE_H_
 #define TREESTORE_H_
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 
 #ifdef __cplusplus
@@ -14,8 +16,8 @@ extern "C" {
 struct ts_io {
 	void *data;
 
-	size_t (*read)(void *buf, size_t bytes, void *uptr);
-	size_t (*write)(void *buf, size_t bytes, void *uptr);
+	long (*read)(void *buf, size_t bytes, void *uptr);
+	long (*write)(const void *buf, size_t bytes, void *uptr);
 };
 
 enum ts_value_type { TS_STRING, TS_NUMBER, TS_VECTOR, TS_ARRAY };

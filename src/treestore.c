@@ -13,8 +13,8 @@
 struct ts_node *ts_text_load(struct ts_io *io);
 int ts_text_save(struct ts_node *tree, struct ts_io *io);
 
-static size_t io_read(void *buf, size_t bytes, void *uptr);
-static size_t io_write(void *buf, size_t bytes, void *uptr);
+static long io_read(void *buf, size_t bytes, void *uptr);
+static long io_write(const void *buf, size_t bytes, void *uptr);
 
 
 /* ---- ts_value implementation ---- */
@@ -779,12 +779,16 @@ struct ts_value *ts_lookup_array(struct ts_node *node, const char *path, struct 
 	return attr->val.array;
 }
 
-static size_t io_read(void *buf, size_t bytes, void *uptr)
+static long io_read(void *buf, size_t bytes, void *uptr)
 {
-	return fread(buf, 1, bytes, uptr);
+	size_t sz = fread(buf, 1, bytes, uptr);
+	if(sz < bytes && errno) return -1;
+	return sz;
 }
 
-static size_t io_write(void *buf, size_t bytes, void *uptr)
+static long io_write(const void *buf, size_t bytes, void *uptr)
 {
-	return fwrite(buf, 1, bytes, uptr);
+	size_t sz = fwrite(buf, 1, bytes, uptr);
+	if(sz < bytes && errno) return -1;
+	return sz;
 }
