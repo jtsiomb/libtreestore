@@ -341,7 +341,7 @@ static int print_attr(struct ts_attr *attr, struct ts_io *io, int level)
 		return -1;
 	}
 
-	if(!(buf = malloc(level + strlen(attr->name) + ts_dynarr_size(val) + 4))) {
+	if(!(buf = malloc(level + strlen(attr->name) + ts_dynarr_size(val) + 5))) {
 		perror("print_attr: failed to allocate name buffer");
 		ts_dynarr_free(val);
 	}
@@ -378,7 +378,7 @@ static char *value_to_str(struct ts_value *value)
 	switch(value->type) {
 	case TS_NUMBER:
 		sprintf(buf, "%g", value->fnum);
-		append_dynstr(str, buf);
+		str = append_dynstr(str, buf);
 		break;
 
 	case TS_VECTOR:
@@ -389,7 +389,7 @@ static char *value_to_str(struct ts_value *value)
 			} else {
 				sprintf(buf, ", %g", value->vec[i]);
 			}
-			append_dynstr(str, buf);
+			str = append_dynstr(str, buf);
 		}
 		DYNARR_STRPUSH(str, ']');
 		break;
@@ -398,13 +398,13 @@ static char *value_to_str(struct ts_value *value)
 		DYNARR_STRPUSH(str, '[');
 		for(i=0; i<value->array_size; i++) {
 			if(i > 0) {
-				append_dynstr(str, ", ");
+				str = append_dynstr(str, ", ");
 			}
 			if(!(valstr = value_to_str(value->array + i))) {
 				ts_dynarr_free(str);
 				return 0;
 			}
-			append_dynstr(str, valstr);
+			str = append_dynstr(str, valstr);
 			ts_dynarr_free(valstr);
 		}
 		DYNARR_STRPUSH(str, ']');
@@ -412,7 +412,7 @@ static char *value_to_str(struct ts_value *value)
 
 	default:
 		sprintf(buf, "\"%s\"", value->str);
-		append_dynstr(str, buf);
+		str = append_dynstr(str, buf);
 	}
 
 	return str;
