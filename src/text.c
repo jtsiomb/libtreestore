@@ -294,21 +294,31 @@ int ts_text_save(struct ts_node *tree, struct ts_io *io)
 	struct ts_node *c;
 	struct ts_attr *attr;
 	int lvl = tree_level(tree);
-	int sz, res = -1;
+	int sz, inline_attr, res = -1;
 
 	if(!(buf = malloc(lvl + strlen(tree->name) + 4))) {
 		perror("ts_text_save failed to allocate buffer");
 		goto end;
 	}
 
-	sz = sprintf(buf, "%s%s {\n", indent(lvl), tree->name);
+	if(tree->child_list || (tree->attr_list && tree->attr_list->next)) {
+		inline_attr = 0;
+	} else {
+		inline_attr = 1;
+	}
+
+	sz = sprintf(buf, "%s%s {", indent(lvl), tree->name);
+	if(!inline_attr) {
+		strcat(buf, "\n");
+		sz++;
+	}
 	if(io->write(buf, sz, io->data) < sz) {
 		goto end;
 	}
 
 	attr = tree->attr_list;
 	while(attr) {
-		if(print_attr(attr, io, lvl) == -1) {
+		if(print_attr(attr, io, inline_attr ? -1 : lvl) == -1) {
 			goto end;
 		}
 		attr = attr->next;
@@ -322,7 +332,11 @@ int ts_text_save(struct ts_node *tree, struct ts_io *io)
 		c = c->next;
 	}
 
-	sz = sprintf(buf, "%s}\n", indent(lvl));
+	if(inline_attr) {
+		sz = sprintf(buf, "}\n");
+	} else {
+		sz = sprintf(buf, "%s}\n", indent(lvl));
+	}
 	if(io->write(buf, sz, io->data) < sz) {
 		goto end;
 	}
@@ -341,12 +355,17 @@ static int print_attr(struct ts_attr *attr, struct ts_io *io, int level)
 		return -1;
 	}
 
-	if(!(buf = malloc(level + strlen(attr->name) + ts_dynarr_size(val) + 5))) {
+	sz = (level >= 0 ? level : 0) + strlen(attr->name) + ts_dynarr_size(val) + 5;
+	if(!(buf = malloc(sz))) {
 		perror("print_attr: failed to allocate name buffer");
 		ts_dynarr_free(val);
 	}
 
-	sz = sprintf(buf, "%s%s = %s\n", indent(level + 1), attr->name, val);
+	if(level >= 0) {
+		sz = sprintf(buf, "%s%s = %s\n", indent(level + 1), attr->name, val);
+	} else {
+		sz = sprintf(buf, " %s = %s ", attr->name, val);
+	}
 	if(io->write(buf, sz, io->data) < sz) {
 		ts_dynarr_free(val);
 		free(buf);
