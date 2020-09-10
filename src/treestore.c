@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 #include "treestore.h"
 
 #ifdef WIN32
@@ -126,8 +127,6 @@ struct val_list_node {
 
 int ts_set_value_str(struct ts_value *tsv, const char *str)
 {
-	char *endp;
-
 	if(tsv->str) {
 		ts_destroy_value(tsv);
 		if(ts_init_value(tsv) == -1) {
@@ -374,6 +373,7 @@ int ts_set_value_arr(struct ts_value *tsv, int count, const struct ts_value *arr
 			return -1;
 		}
 		tsv->type = TS_VECTOR;
+		tsv->vec_size = count;
 
 		for(i=0; i<count; i++) {
 			tsv->vec[i] = tsv->array[i].fnum;
@@ -536,6 +536,7 @@ void ts_add_attr(struct ts_node *node, struct ts_attr *attr)
 	} else {
 		node->attr_list = node->attr_tail = attr;
 	}
+	node->attr_count++;
 }
 
 struct ts_attr *ts_get_attr(struct ts_node *node, const char *name)
@@ -610,6 +611,7 @@ void ts_add_child(struct ts_node *node, struct ts_node *child)
 	} else {
 		node->child_list = node->child_tail = child;
 	}
+	node->child_count++;
 }
 
 int ts_remove_child(struct ts_node *node, struct ts_node *child)
@@ -631,6 +633,8 @@ int ts_remove_child(struct ts_node *node, struct ts_node *child)
 		node->child_tail = iter;
 	}
 	node->child_list = dummy.next;
+	node->child_count--;
+	assert(node->child_count >= 0);
 	return 0;
 }
 
