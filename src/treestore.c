@@ -527,6 +527,17 @@ void ts_free_tree(struct ts_node *tree)
 	ts_free_node(tree);
 }
 
+int ts_set_node_name(struct ts_node *node, const char *name)
+{
+	char *n = malloc(strlen(name) + 1);
+	if(!n) return -1;
+	strcpy(n, name);
+
+	free(node->name);
+	node->name = n;
+	return 0;
+}
+
 void ts_add_attr(struct ts_node *node, struct ts_attr *attr)
 {
 	attr->next = 0;

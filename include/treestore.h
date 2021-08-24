@@ -113,6 +113,8 @@ void ts_free_node(struct ts_node *n);	/**< also calls ts_destroy_node */
 /** recursively destroy all the nodes of the tree */
 void ts_free_tree(struct ts_node *tree);
 
+int ts_set_node_name(struct ts_node *node, const char *name);
+
 void ts_add_attr(struct ts_node *node, struct ts_attr *attr);
 struct ts_attr *ts_get_attr(struct ts_node *node, const char *name);
 
