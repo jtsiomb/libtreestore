@@ -26,7 +26,7 @@ rootnode {
 
 License
 -------
-Copyright (C) 2016-2019 John Tsiombikas <nuclear@member.fsf.org>
+Copyright (C) 2016-2023 John Tsiombikas <nuclear@mutantstargoat.com>
 
 Libtreestore is free software. Feel free to use, modify, and/or redistribute
 it, under the terms of the MIT/X11 license. See LICENSE for detauls.

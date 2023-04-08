@@ -1,0 +1,73 @@
+#!/bin/sh
+
+PREFIX=/usr/local
+opt=yes
+dbg=yes
+
+echo "configuring libtreestore"
+
+srcdir="`dirname "$0"`"
+
+# process arguments
+for arg; do
+	case "$arg" in
+	--prefix=*)
+		value=`echo $arg | sed 's/--prefix=//'`
+		PREFIX=${value:-$prefix}
+		;;
+	
+	--enable-opt)
+		opt=yes;;
+	--disable-opt)
+		opt=no;;
+
+	--enable-debug)
+		dbg=yes;;
+	--disable-debug)
+		dbg=no;;
+
+	--help)
+		echo 'usage: ./configure [options]'
+		echo 'options:'
+		echo '  --prefix=<path>: installation path (default: /usr/local)'
+		echo '  --enable-opt: enable speed optimizations (default)'
+		echo '  --disable-opt: disable speed optimizations'
+		echo '  --enable-debug: include debugging symbols (default)'
+		echo '  --disable-debug: do not include debugging symbols'
+		echo 'all invalid options are silently ignored'
+		exit 0
+		;;
+	esac
+done
+
+echo "  prefix: $PREFIX"
+echo "  optimize for speed: $opt"
+echo "  include debugging symbols: $dbg"
+echo ""
+
+
+# create Makefile
+echo 'creating Makefile ...'
+echo "PREFIX = $PREFIX" >Makefile
+echo "srcdir = $srcdir" >>Makefile
+
+if [ "$dbg" = 'yes' ]; then
+	echo 'dbg = -g' >>Makefile
+fi
+
+if [ "$opt" = 'yes' ]; then
+	echo 'opt = -O3' >>Makefile
+fi
+
+if [ -n "$CFLAGS" ]; then
+	echo "add_cflags = $CFLAGS" >>Makefile
+fi
+if [ -n "$LDFLAGS" ]; then
+	echo "add_ldflags = $LDFLAGS" >>Makefile
+fi
+
+cat "$srcdir/Makefile.in" >>Makefile
+
+echo ''
+echo 'Done. You can now type make to compile libtreestore.'
+echo ''

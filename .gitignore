@@ -4,6 +4,4 @@
 *.so.*
 *.so
 *.a
-CMakeFiles/
-*.cmake
-*.txt
+Makefile

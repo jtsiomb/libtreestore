@@ -1,0 +1,72 @@
+src = $(wildcard src/*.c)
+obj = $(src:.c=.o)
+dep = $(src:.c=.d)
+
+so_major = 0
+so_minor = 3
+
+name = treestor
+alib = lib$(name).a
+libdir = lib
+
+warn = -pedantic -Wall
+inc = -Iinclude
+CFLAGS = $(warn) $(inc) $(dbg) $(opt) $(pic) -MMD $(add_cflags)
+LDFLAGS = -lm $(add_ldflags)
+
+sys := $(shell uname -s | sed 's/MINGW.*/mingw/')
+ifeq ($(sys), mingw)
+	solib = $(name).dll
+	sharedopt = -shared
+	sodir = bin
+else
+	solib = lib$(name).so.$(so_major).$(so_minor)
+	soname = lib$(name).so.$(so_major)
+	ldname = lib$(name).so
+	sharedopt = -shared -Wl,-soname,$(soname)
+	sodir = $(libdir)
+	pic = -fPIC
+endif
+
+
+
+.PHONY: all
+all: $(solib) $(alib)
+
+$(alib): $(obj)
+	$(AR) rcs $@ $(obj)
+
+$(solib): $(obj)
+	$(CC) $(sharedopt) -o $@ $(obj) $(LDFLAGS)
+
+-include $(dep)
+
+.PHONY: clean
+clean:
+	rm -f $(obj) $(solib) $(alib)
+
+.PHONY: cleandep
+cleandep:
+	rm -f $(dep)
+
+.PHONY: install
+install: $(solib) $(alib)
+	mkdir -p $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/$(libdir)
+	mkdir -p $(DESTDIR)$(PREFIX)/$(sodir)
+	cp include/treestor.h $(DESTDIR)$(PREFIX)/include/treestor.h
+	cp $(alib) $(DESTDIR)$(PREFIX)/$(libdir)/$(alib)
+	cp $(solib) $(DESTDIR)$(PREFIX)/$(sodir)/$(solib)
+	[ -n "$(soname)" ] && \
+		rm -f $(DESTDIR)$(PREFIX)/$(sodir)/$(ldname) && \
+		rm -f $(DESTDIR)$(PREFIX)/$(sodir)/$(soname) && \
+		ln -s $(solib) $(DESTDIR)$(PREFIX)/$(sodir)/$(soname) && \
+		ln -s $(soname) $(DESTDIR)$(PREFIX)/$(sodir)/$(ldname) || true
+
+.PHONY: uninstall
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/include/treestor.h
+	rm -f $(DESTDIR)$(PREFIX)/$(libdir)/$(alib)
+	rm -f $(DESTDIR)$(PREFIX)/$(sodir)/$(solib)
+	[ -n "$(soname)" ] && \
+		rm -f $(DESTDIR)$(PREFIX)/$(sodir)/$(ldname) && \
+		rm -f $(DESTDIR)$(PREFIX)/$(sodir)/$(soname) || true

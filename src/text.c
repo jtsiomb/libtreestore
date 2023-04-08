@@ -1,9 +1,35 @@
+/*
+libtreestore - a library for reading/writing hierarchical data as text or binary
+Copyright (C) 2016-2023 John Tsiombikas <nuclear@mutantstargoat.com>
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. The name of the author may not be used to endorse or promote products
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+OF SUCH DAMAGE.
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
-#include "treestore.h"
+#include "treestor.h"
 #include "dynarr.h"
 
 struct parser {
@@ -28,7 +54,7 @@ static const char *toktypestr(int type);
 #define EXPECT(type) \
 	do { \
 		if(next_token(pst) != (type)) { \
-			fprintf(stderr, "expected %s token\n", toktypestr(type)); \
+			fprintf(stderr, "line %d: expected %s token\n", pst->nline, toktypestr(type)); \
 			goto err; \
 		} \
 	} while(0)
@@ -36,7 +62,7 @@ static const char *toktypestr(int type);
 #define EXPECT_SYM(c) \
 	do { \
 		if(next_token(pst) != TOK_SYM || pst->token[0] != (c)) { \
-			fprintf(stderr, "expected symbol: %c\n", c); \
+			fprintf(stderr, "line %d: expected symbol: %c\n", pst->nline, c); \
 			goto err; \
 		} \
 	} while(0)
@@ -49,7 +75,7 @@ struct ts_node *ts_text_load(struct ts_io *io)
 	struct ts_node *node = 0;
 
 	pstate.io = io;
-	pstate.nline = 0;
+	pstate.nline = 1;
 	pstate.nextc = -1;
 	if(!(pstate.token = ts_dynarr_alloc(0, 1))) {
 		perror("failed to allocate token string");
@@ -193,7 +219,8 @@ static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 
 		type = next_token(pst);
 		if(!(type == TOK_SYM && (pst->token[0] == ',' || pst->token[0] == endsym))) {
-			fprintf(stderr, "read_array: expected comma or end symbol ('%c')\n", endsym);
+			fprintf(stderr, "read_array: line %d: expected comma or end symbol ('%c')\n",
+					pst->nline, endsym);
 			return -1;
 		}
 		if(pst->token[0] == endsym) {
@@ -345,34 +372,58 @@ end:
 	return res;
 }
 
+#define IO_WRITE(buf, sz) \
+	do { \
+		if(io->write(buf, sz, io->data) < sz) { \
+			fprintf(stderr, "failed to write %d bytes\n", sz); \
+			goto end; \
+		} \
+	} while(0)
+
 static int print_attr(struct ts_attr *attr, struct ts_io *io, int level)
 {
-	char *buf, *val;
-	int sz;
+	char buf[64];
+	char *val = 0;
+	int sz, slen, res = -1;
+
+	if(attr->val.type == TS_STRING) {
+		slen = strlen(attr->val.str);
+
+		if(level >= 0) {
+			sz = sprintf(buf, "%s%s = \"", indent(level + 1), attr->name);
+			IO_WRITE(buf, sz);
+			IO_WRITE(attr->val.str, slen);
+			IO_WRITE("\"\n", 2);
+		} else {
+			sz = sprintf(buf, " %s = \"", attr->name);
+			IO_WRITE(buf, sz);
+			IO_WRITE(attr->val.str, slen);
+			IO_WRITE("\" ", 2);
+		}
+		return 0;
+	}
 
 	if(!(val = value_to_str(&attr->val))) {
 		return -1;
 	}
-
-	sz = (level >= 0 ? level : 0) + strlen(attr->name) + ts_dynarr_size(val) + 5;
-	if(!(buf = malloc(sz))) {
-		perror("print_attr: failed to allocate name buffer");
-		ts_dynarr_free(val);
-	}
+	slen = ts_dynarr_size(val) - 1;
 
 	if(level >= 0) {
-		sz = sprintf(buf, "%s%s = %s\n", indent(level + 1), attr->name, val);
+		sz = sprintf(buf, "%s%s = ", indent(level + 1), attr->name);
+		IO_WRITE(buf, sz);
+		IO_WRITE(val, slen);
+		IO_WRITE("\n", 1);
 	} else {
-		sz = sprintf(buf, " %s = %s ", attr->name, val);
+		sz = sprintf(buf, " %s = ", attr->name);
+		IO_WRITE(buf, sz);
+		IO_WRITE(val, slen);
+		IO_WRITE(" ", 1);
 	}
-	if(io->write(buf, sz, io->data) < sz) {
-		ts_dynarr_free(val);
-		free(buf);
-		return -1;
-	}
+
+	res = 0;
+end:
 	ts_dynarr_free(val);
-	free(buf);
-	return 0;
+	return res;
 }
 
 static char *append_dynstr(char *dest, char *s)
@@ -395,7 +446,7 @@ static char *value_to_str(struct ts_value *value)
 
 	switch(value->type) {
 	case TS_NUMBER:
-		sprintf(buf, "%g", value->fnum);
+		sprintf(buf, "%f", value->fnum);
 		str = append_dynstr(str, buf);
 		break;
 
@@ -403,9 +454,9 @@ static char *value_to_str(struct ts_value *value)
 		DYNARR_STRPUSH(str, '[');
 		for(i=0; i<value->vec_size; i++) {
 			if(i == 0) {
-				sprintf(buf, "%g", value->vec[i]);
+				sprintf(buf, "%f", value->vec[i]);
 			} else {
-				sprintf(buf, ", %g", value->vec[i]);
+				sprintf(buf, ", %f", value->vec[i]);
 			}
 			str = append_dynstr(str, buf);
 		}
@@ -429,8 +480,9 @@ static char *value_to_str(struct ts_value *value)
 		break;
 
 	default:
-		sprintf(buf, "\"%s\"", value->str);
-		str = append_dynstr(str, buf);
+		str = append_dynstr(str, "\"");
+		str = append_dynstr(str, value->str);
+		str = append_dynstr(str, "\"");
 	}
 
 	return str;
