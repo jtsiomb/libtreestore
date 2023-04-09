@@ -38,6 +38,8 @@ extern "C" {
 #define TS_DEFVAL(x)
 #endif
 
+enum ts_save_mode { TS_TEXT, TS_BIN };
+
 /** set of user-supplied I/O functions, for ts_load_io/ts_save_io */
 struct ts_io {
 	void *data;
@@ -64,6 +66,10 @@ struct ts_value {
 	struct ts_value *array;	/**< elements of the array */
 	int array_size;			/**< size of the array (in elements) */
 };
+
+/* choose to save files as TS_TEXT or TS_BIN */
+void ts_set_save_mode(enum ts_save_mode mode);
+enum ts_save_mode ts_get_save_mode(void);
 
 int ts_init_value(struct ts_value *tsv);
 void ts_destroy_value(struct ts_value *tsv);
