@@ -40,9 +40,24 @@ OF SUCH DAMAGE.
 struct ts_node *ts_text_load(struct ts_io *io);
 int ts_text_save(struct ts_node *tree, struct ts_io *io);
 
+struct ts_node *ts_bin_load(struct ts_io *io);
+int ts_bin_save(struct ts_node *tree, struct ts_io *io);
+
 static long io_read(void *buf, size_t bytes, void *uptr);
 static long io_write(const void *buf, size_t bytes, void *uptr);
 
+
+static enum ts_save_mode savemode;
+
+void ts_set_save_mode(enum ts_save_mode mode)
+{
+	savemode = mode;
+}
+
+enum ts_save_mode ts_get_save_mode(void)
+{
+	return savemode;
+}
 
 /* ---- ts_value implementation ---- */
 
@@ -715,6 +730,10 @@ struct ts_node *ts_load_file(FILE *fp)
 
 struct ts_node *ts_load_io(struct ts_io *io)
 {
+	struct ts_node *n;
+	if((n = ts_bin_load(io))) {
+		return n;
+	}
 	return ts_text_load(io);
 }
 
@@ -743,6 +762,9 @@ int ts_save_file(struct ts_node *tree, FILE *fp)
 
 int ts_save_io(struct ts_node *tree, struct ts_io *io)
 {
+	if(savemode == TS_BIN) {
+		return ts_bin_save(tree, io);
+	}
 	return ts_text_save(tree, io);
 }
 
