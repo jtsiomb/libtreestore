@@ -22,6 +22,9 @@ void *ts_dynarr_alloc(int elem, int szelem)
 {
 	struct arrdesc *desc;
 
+	if(elem < 0 || szelem <= 0) {
+		return 0;
+	}
 	if(!(desc = malloc(elem * szelem + sizeof *desc))) {
 		return 0;
 	}
@@ -44,10 +47,11 @@ void *ts_dynarr_resize(void *da, int elem)
 	void *tmp;
 	struct arrdesc *desc;
 
-	if(!da) return 0;
+	if(!da || elem < 0) return 0;
 	desc = DESC(da);
 
 	newsz = desc->szelem * elem;
+	if(newsz < 0) return 0;
 
 	if(!(tmp = realloc(desc, newsz + sizeof *desc))) {
 		return 0;
@@ -90,8 +94,7 @@ void *ts_dynarr_push(void *da, void *item)
 		int newsz = desc->max_elem ? desc->max_elem * 2 : 1;
 
 		if(!(tmp = ts_dynarr_resize(da, newsz))) {
-			fprintf(stderr, "failed to resize\n");
-			return da;
+			return 0;
 		}
 		da = tmp;
 		desc = DESC(da);
@@ -120,8 +123,7 @@ void *ts_dynarr_pop(void *da)
 		int newsz = desc->max_elem / 2;
 
 		if(!(tmp = ts_dynarr_resize(da, newsz))) {
-			fprintf(stderr, "failed to resize\n");
-			return da;
+			return 0;
 		}
 		da = tmp;
 		desc = DESC(da);
@@ -130,4 +132,11 @@ void *ts_dynarr_pop(void *da)
 	desc->nelem--;
 
 	return da;
+}
+
+void *ts_dynarr_finalize(void *da)
+{
+	struct arrdesc *desc = DESC(da);
+	memmove(desc, da, desc->bufsz);
+	return desc;
 }

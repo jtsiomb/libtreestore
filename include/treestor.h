@@ -1,6 +1,6 @@
 /*
 libtreestore - a library for reading/writing hierarchical data as text or binary
-Copyright (C) 2016-2023 John Tsiombikas <nuclear@mutantstargoat.com>
+Copyright (C) 2016-2026 John Tsiombikas <nuclear@mutantstargoat.com>
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:

@@ -1,6 +1,6 @@
 /*
 libtreestore - a library for reading/writing hierarchical data as text or binary
-Copyright (C) 2016-2023 John Tsiombikas <nuclear@mutantstargoat.com>
+Copyright (C) 2016-2026 John Tsiombikas <nuclear@mutantstargoat.com>
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -115,6 +115,7 @@ static int read_value(struct parser *pst, int toktype, struct ts_value *val)
 			}
 		} else {
 			fprintf(stderr, "read_node: unexpected rhs symbol: %c\n", pst->token[0]);
+			return -1;
 		}
 		break;
 
@@ -199,50 +200,62 @@ err:
 	return 0;
 }
 
+int ts_value_array_to_vec(struct ts_value *tsv);
+
 static int read_array(struct parser *pst, struct ts_value *tsv, char endsym)
 {
-	int type;
-	struct ts_value values[32];
-	int i, nval = 0;
-	int res;
+	int i, type;
+	struct ts_value *values, *tmp, val;
+
+	if(!(values = ts_dynarr_alloc(0, sizeof *values))) {
+		fprintf(stderr, "read_array: failed to allocate values array\n");
+		return -1;
+	}
 
 	while((type = next_token(pst)) != -1) {
-		ts_init_value(values + nval);
-		if(read_value(pst, type, values + nval) == -1) {
-			return -1;
+		ts_init_value(&val);
+		if(read_value(pst, type, &val) == -1) {
+			goto err;
 		}
-		if(nval < 31) {
-			++nval;
-		} else {
-			ts_destroy_value(values + nval);
+
+		if(!(tmp = ts_dynarr_push(values, &val))) {
+			ts_destroy_value(&val);
+			goto err;
 		}
+		values = tmp;
 
 		type = next_token(pst);
 		if(!(type == TOK_SYM && (pst->token[0] == ',' || pst->token[0] == endsym))) {
 			fprintf(stderr, "read_array: line %d: expected comma or end symbol ('%c')\n",
 					pst->nline, endsym);
-			return -1;
+			goto err;
 		}
 		if(pst->token[0] == endsym) {
 			break;	/* we're done */
 		}
 	}
 
-	if(!nval) {
-		return -1;
+	if(ts_dynarr_empty(values)) {
+		goto err;
 	}
 
-	res = ts_set_value_arr(tsv, nval, values);
+	tsv->array_size = ts_dynarr_size(values);
+	tsv->array = ts_dynarr_finalize(values);
+	tsv->type = TS_ARRAY;
+	ts_value_array_to_vec(tsv);	/* convert to vector if it's only numbers */
+	return 0;
 
-	for(i=0; i<nval; i++) {
+err:
+	for(i=0; i<ts_dynarr_size(values); i++) {
 		ts_destroy_value(values + i);
 	}
-	return res;
+	ts_dynarr_free(values);
+	return -1;
 }
 
 static int nextchar(struct parser *pst)
 {
-	char c;
+	unsigned char c;
 
 	if(pst->nextc >= 0) {
 		c = pst->nextc;

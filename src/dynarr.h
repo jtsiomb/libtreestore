@@ -35,6 +35,7 @@ void *ts_dynarr_clear(void *da);
 void *ts_dynarr_push(void *da, void *item);
 void *ts_dynarr_pop(void *da);
 
+void *ts_dynarr_finalize(void *da);
 
 /* helper macros */
 #define DYNARR_RESIZE(da, n) \
