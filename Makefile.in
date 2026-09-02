@@ -5,7 +5,7 @@ dep = $(src:.c=.d)
 so_major = 0
 so_minor = 3
 
-name = treestor
+name = treestore
 alib = lib$(name).a
 libdir = lib
 
